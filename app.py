@@ -128,6 +128,12 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
 
     df_top = df.sort_values(by='composite_score', ascending=False).head(int(top_k_words)).copy()
 
+    # گرد کردن اعداد برای نمایش تمیزتر در جدول
+    df_top['norm_tfidf'] = df_top['norm_tfidf'].round(4)
+    df_top['norm_pr_cooc'] = df_top['norm_pr_cooc'].round(4)
+    df_top['norm_pr_bert'] = df_top['norm_pr_bert'].round(4)
+    df_top['composite_score'] = df_top['composite_score'].round(4)
+
     # رسم گراف
     G_viz = nx.Graph()
     main_node = "مرکز"
@@ -162,7 +168,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     return fig, df_display
 
 # ------------------------------------------------------------------------------
-# ۳. رابط کاربری بدون علائم نگارشی برای جلوگیری از به‌هم‌ریختگی LTR/RTL
+# ۳. CSS سفارشی برای راست‌چین کردن کامل جدول و متون
 # ------------------------------------------------------------------------------
 custom_css = """
 body, .gradio-container {
@@ -172,6 +178,16 @@ body, .gradio-container {
 .gradio-container .markdown {
     text-align: right !important;
     direction: rtl !important;
+}
+/* استایل راست‌چین‌سازی کامل جدول */
+.gradio-container table, 
+.gradio-container th, 
+.gradio-container td {
+    direction: rtl !important;
+    text-align: right !important;
+}
+.gradio-container th {
+    text-align: right !important;
 }
 """
 
