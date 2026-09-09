@@ -1,0 +1,8 @@
+gradio
+pandas
+numpy
+networkx
+matplotlib
+scikit-learn
+arabic_reshaper
+python-bidi
