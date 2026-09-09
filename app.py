@@ -1,37 +1,14 @@
 import os
 import re
-import urllib.request
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as fm
 import networkx as nx
 import numpy as np
 import pandas as pd
 import gradio as gr
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import arabic_reshaper
-from bidi.algorithm import get_display
-
-# ------------------------------------------------------------------------------
-# دانلود و تنظیم فونت فارسی استاندارد برای Matplotlib
-# ------------------------------------------------------------------------------
-FONT_PATH = "Vazirmatn-Regular.ttf"
-if not os.path.exists(FONT_PATH):
-    url = "https://github.com/rastikerdar/vazirmatn/releases/download/v33.003/Vazirmatn-Regular.ttf"
-    try:
-        urllib.request.urlretrieve(url, FONT_PATH)
-    except Exception as e:
-        print(f"Font download error: {e}")
-
-if os.path.exists(FONT_PATH):
-    fm.fontManager.addfont(FONT_PATH)
-    plt.rcParams['font.family'] = 'Vazirmatn'
-else:
-    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Tahoma']
-
-plt.rcParams['axes.unicode_minus'] = False
 
 # ------------------------------------------------------------------------------
 # ۱. بانک کلمات و ثوابت
@@ -51,8 +28,7 @@ STYLE_GOLDEN_WORDS = {
         "شمع", "پروانه", "خرابات", "صوفی", "باده", "فراق", "وصال", "غم", "نگار",
         "میکده", "رخ", "نظر", "آستان", "طریقت", "حقیقت", "شاهد", "مطرب", "درویش",
         "صنم", "بت", "میخانه", "مغان", "خراب", "حریف", "قدح", "سبو", "خم",
-        "مست", "مستی", "سوز", "گداز", "اشک", "ناله", "حسرت", "وفا", "جفا",
-        "جور", "ناز", "نیاز", "درد", "درمان", "طبیب", "بلا", "فتنه", "کوی"
+        "مست", "مستی", "سوز", "گداز", "اشک", "ناله", "حسرت", "وفا", "جفا"
     },
     "خراسانی": {
         "میهن", "شاه", "جنگ", "تیغ", "سپاه", "خسرو", "رزم", "بزم", "دژ", "اسپ",
@@ -74,10 +50,6 @@ def preprocess_text(text):
     for old_char, new_char in replacements.items():
         text = text.replace(old_char, new_char)
     return re.sub(r"[ًٌٍَُِّْٰٖٓٔـ]", "", text)
-
-def fix_persian_text(text):
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped)
 
 # ------------------------------------------------------------------------------
 # ۲. پردازش سبک و رسم گراف
@@ -156,14 +128,13 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
 
     df_top = df.sort_values(by='composite_score', ascending=False).head(int(top_k_words)).copy()
 
-    # رسم گراف
+    # رسم گراف بدون اعمال BIDI یا Reshaper روی متون
     G_viz = nx.Graph()
-    main_node = "CENTER"
+    main_node = "مرکز"
     G_viz.add_node(main_node)
 
     for _, row in df_top.iterrows():
-        fixed_kw = fix_persian_text(row['keyword'])
-        G_viz.add_edge(main_node, fixed_kw, weight=row['composite_score'])
+        G_viz.add_edge(main_node, row['keyword'], weight=row['composite_score'])
 
     fig, ax = plt.subplots(figsize=(8, 8), dpi=150)
     fig.patch.set_facecolor('#FAFAFA')
@@ -173,19 +144,16 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     nx.draw_networkx_nodes(G_viz, pos, nodelist=[main_node], node_color='#1F2937', node_size=1100, ax=ax)
 
     other_nodes = [n for n in G_viz.nodes() if n != main_node]
-    colors = ['#FFD700' if df_top[df_top['keyword'].apply(fix_persian_text) == node]['status'].values[0] == "طلایی (سبکی)" else '#00C9A7'
+    colors = ['#FFD700' if df_top[df_top['keyword'] == node]['status'].values[0] == "طلایی (سبکی)" else '#00C9A7'
               for node in other_nodes]
 
     nx.draw_networkx_nodes(G_viz, pos, nodelist=other_nodes, node_color=colors, node_size=900, alpha=0.92, edgecolors='#374151', linewidths=1.2, ax=ax)
     nx.draw_networkx_edges(G_viz, pos, alpha=0.35, edge_color='#6B7280', width=1.2, ax=ax)
 
-    font_prop = fm.FontProperties(fname=FONT_PATH, size=8) if os.path.exists(FONT_PATH) else None
-
     for node in other_nodes:
-        ax.text(pos[node][0], pos[node][1], node, horizontalalignment='center', verticalalignment='center', fontweight='bold', color='#111827', fontproperties=font_prop)
+        ax.text(pos[node][0], pos[node][1], node, horizontalalignment='center', verticalalignment='center', fontsize=9, fontweight='bold', color='#111827')
 
-    title_text = fix_persian_text(f"گراف کلمات کلیدی - سبک {selected_style}")
-    ax.set_title(title_text, fontsize=11, fontweight='bold', pad=15, color='#111827', fontproperties=font_prop)
+    ax.set_title(f"گراف کلمات کلیدی - سبک {selected_style}", fontsize=11, fontweight='bold', pad=15, color='#111827')
     ax.axis('off')
 
     df_display = df_top[['keyword', 'status', 'norm_tfidf', 'norm_pr_cooc', 'norm_pr_bert', 'composite_score']].reset_index(drop=True)
@@ -194,11 +162,22 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     return fig, df_display
 
 # ------------------------------------------------------------------------------
-# ۳. UI تمیز بدون CSS مخرب RTL
+# ۳. تنظیمات دقیق RTL بدون بهم‌ریختگی
 # ------------------------------------------------------------------------------
-with gr.Blocks(title="سامانه تحلیل سبک‌شناختی اشعار (Lite)", theme=gr.themes.Soft()) as demo:
+custom_css = """
+body, .gradio-container {
+    direction: rtl !important;
+    text-align: right !important;
+}
+.gradio-container .markdown {
+    text-align: right !important;
+    direction: rtl !important;
+}
+"""
+
+with gr.Blocks(title="سامانه تحلیل سبک‌شناختی اشعار (Lite)", theme=gr.themes.Soft(), css=custom_css) as demo:
     gr.Markdown(
-        f"""
+        """
         # 📜 سامانه تحلیل سبک‌شناختی اشعار فارسی (نسخه سبک)
         
         این ابزار برای تحلیل آنلاین، سریع و استخراج کلمات کلیدی سبک‌شناختی اشعار بر پایه **TF-IDF** و **گراف‌های هم‌آیی واژگان** طراحی شده است.
