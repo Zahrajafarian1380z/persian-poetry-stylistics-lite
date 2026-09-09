@@ -63,7 +63,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
             return None, pd.DataFrame({"خطا": [f"مشکل در خواندن فایل: {str(e)}"]})
 
     if not raw_text or not raw_text.strip():
-        return None, pd.DataFrame({"پیام": ["لطفاً یک متن وارد کنید یا فایل متنی آپلود نمایید."]})
+        return None, pd.DataFrame({"پیام": ["لطفاً یک متن وارد کنید یا فایل متنی آپلود نمایید"]})
 
     clean_txt = preprocess_text(raw_text)
     sentences = [s.strip() for s in clean_txt.splitlines() if s.strip()]
@@ -75,7 +75,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
             cleaned_docs.append(" ".join(words))
 
     if not cleaned_docs:
-        return None, pd.DataFrame({"پیام": ["واژه معتبری یافت نشد."]})
+        return None, pd.DataFrame({"پیام": ["واژه معتبری یافت نشد"]})
 
     vectorizer = TfidfVectorizer(max_features=300, min_df=1)
     tfidf_matrix = vectorizer.fit_transform(cleaned_docs)
@@ -118,7 +118,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
 
     golden_set = STYLE_GOLDEN_WORDS.get(selected_style, set())
     df['style_modifier'] = df['keyword'].apply(lambda w: 1.4 if w in golden_set else 0.75)
-    df['status'] = df['keyword'].apply(lambda w: "طلایی (سبکی)" if w in golden_set else "جریمه‌شده")
+    df['status'] = df['keyword'].apply(lambda w: "طلایی سبکی" if w in golden_set else "جریمه شده")
 
     df['composite_score'] = (
         0.30 * df['norm_tfidf'] +
@@ -128,7 +128,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
 
     df_top = df.sort_values(by='composite_score', ascending=False).head(int(top_k_words)).copy()
 
-    # رسم گراف بدون اعمال BIDI یا Reshaper روی متون
+    # رسم گراف
     G_viz = nx.Graph()
     main_node = "مرکز"
     G_viz.add_node(main_node)
@@ -144,7 +144,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     nx.draw_networkx_nodes(G_viz, pos, nodelist=[main_node], node_color='#1F2937', node_size=1100, ax=ax)
 
     other_nodes = [n for n in G_viz.nodes() if n != main_node]
-    colors = ['#FFD700' if df_top[df_top['keyword'] == node]['status'].values[0] == "طلایی (سبکی)" else '#00C9A7'
+    colors = ['#FFD700' if df_top[df_top['keyword'] == node]['status'].values[0] == "طلایی سبکی" else '#00C9A7'
               for node in other_nodes]
 
     nx.draw_networkx_nodes(G_viz, pos, nodelist=other_nodes, node_color=colors, node_size=900, alpha=0.92, edgecolors='#374151', linewidths=1.2, ax=ax)
@@ -153,7 +153,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     for node in other_nodes:
         ax.text(pos[node][0], pos[node][1], node, horizontalalignment='center', verticalalignment='center', fontsize=9, fontweight='bold', color='#111827')
 
-    ax.set_title(f"گراف کلمات کلیدی - سبک {selected_style}", fontsize=11, fontweight='bold', pad=15, color='#111827')
+    ax.set_title(f"گراف کلمات کلیدی سبک {selected_style}", fontsize=11, fontweight='bold', pad=15, color='#111827')
     ax.axis('off')
 
     df_display = df_top[['keyword', 'status', 'norm_tfidf', 'norm_pr_cooc', 'norm_pr_bert', 'composite_score']].reset_index(drop=True)
@@ -162,7 +162,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     return fig, df_display
 
 # ------------------------------------------------------------------------------
-# ۳. تنظیمات دقیق RTL بدون بهم‌ریختگی
+# ۳. رابط کاربری بدون علائم نگارشی برای جلوگیری از به‌هم‌ریختگی LTR/RTL
 # ------------------------------------------------------------------------------
 custom_css = """
 body, .gradio-container {
@@ -175,12 +175,14 @@ body, .gradio-container {
 }
 """
 
-with gr.Blocks(title="سامانه تحلیل سبک‌شناختی اشعار (Lite)", theme=gr.themes.Soft(), css=custom_css) as demo:
+with gr.Blocks(title="سامانه تحلیل سبک شناختی اشعار", theme=gr.themes.Soft(), css=custom_css) as demo:
     gr.Markdown(
         """
-        # 📜 سامانه تحلیل سبک‌شناختی اشعار فارسی (نسخه سبک)
+        # 📜 سامانه تحلیل سبک شناختی اشعار فارسی نسخه سبک
         
-        این ابزار برای تحلیل آنلاین، سریع و استخراج کلمات کلیدی سبک‌شناختی اشعار بر پایه **TF-IDF** و **گراف‌های هم‌آیی واژگان** طراحی شده است.
+        برای استفاده از نسخه اصلی مبتنی بر پارس برت از مخزن زیر استفاده کنید
+        
+        👉 **[مخزن اصلی ParsBERT در گیت هاب](https://github.com/Zahrajafarian1380z/persian-poetry-knowledge-graph)**
         """
     )
 
@@ -196,22 +198,22 @@ with gr.Blocks(title="سامانه تحلیل سبک‌شناختی اشعار (
                 maximum=50,
                 value=25,
                 step=5,
-                label="🔢 تعداد کلمات کلیدی استخراج‌شده"
+                label="🔢 تعداد کلمات کلیدی استخراج شده"
             )
             text_input = gr.Textbox(
                 lines=5,
                 label="✍️ تایپ مستقیم متن یا شعر",
-                placeholder="شعر خود را اینجا وارد کنید..."
+                placeholder="شعر خود را اینجا وارد کنید"
             )
             file_input = gr.File(
-                label="📁 یا آپلود فایل متنی (.txt)",
+                label="📁 یا آپلود فایل متنی txt",
                 file_types=[".txt"]
             )
-            submit_btn = gr.Button("⚡ اجرای تحلیل سبک‌شناختی", variant="primary")
+            submit_btn = gr.Button("⚡ اجرای تحلیل سبک شناختی", variant="primary")
 
         with gr.Column(scale=2):
             plot_output = gr.Plot(label="🕸️ گراف چندلایه کلمات کلیدی")
-            table_output = gr.Dataframe(label="📊 جدول رتبه‌بندی کلمات کلیدی و امتیازات")
+            table_output = gr.Dataframe(label="📊 جدول رتبه بندی کلمات کلیدی و امتیازات")
 
     submit_btn.click(
         fn=analyze_style_pipeline,
