@@ -1,8 +1,10 @@
 import os
 import re
+import urllib.request
 import matplotlib
-matplotlib.use('Agg')  # جلوگیری از ارورهای نمایش روی سرورهای لینوکس
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -12,8 +14,23 @@ from sklearn.metrics.pairwise import cosine_similarity
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-# تنظیم فونت استاندارد برای پشتیبانی از فارسی در گراف
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Tahoma']
+# ------------------------------------------------------------------------------
+# دانلود و تنظیم فونت فارسی استاندارد برای Matplotlib
+# ------------------------------------------------------------------------------
+FONT_PATH = "Vazirmatn-Regular.ttf"
+if not os.path.exists(FONT_PATH):
+    url = "https://github.com/rastikerdar/vazirmatn/releases/download/v33.003/Vazirmatn-Regular.ttf"
+    try:
+        urllib.request.urlretrieve(url, FONT_PATH)
+    except Exception as e:
+        print(f"Font download error: {e}")
+
+if os.path.exists(FONT_PATH):
+    fm.fontManager.addfont(FONT_PATH)
+    plt.rcParams['font.family'] = 'Vazirmatn'
+else:
+    plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial', 'Tahoma']
+
 plt.rcParams['axes.unicode_minus'] = False
 
 # ------------------------------------------------------------------------------
@@ -35,17 +52,11 @@ STYLE_GOLDEN_WORDS = {
         "میکده", "رخ", "نظر", "آستان", "طریقت", "حقیقت", "شاهد", "مطرب", "درویش",
         "صنم", "بت", "میخانه", "مغان", "خراب", "حریف", "قدح", "سبو", "خم",
         "مست", "مستی", "سوز", "گداز", "اشک", "ناله", "حسرت", "وفا", "جفا",
-        "جور", "ناز", "نیاز", "درد", "درمان", "طبیب", "بلا", "فتنه", "کوی",
-        "دیوانه", "مجنون", "لیلی", "سودا", "هوس", "شوق", "امید", "خال", "خط",
-        "لب", "چشم", "ابرو", "قمت", "سرو", "یاقوت", "پیمانه", "ساغر", "صحبت",
-        "خلوت", "انس", "فنا", "بقا", "سالک", "مرشد", "طاهر", "پاک", "گناه",
-        "توبه", "زهد", "صومعه", "محراب", "مسجد", "غزل", "نغمه", "چنگ", "رباب",
-        "سجاده", "طاعت", "خرقه", "سالوس", "کرم", "لطف", "عنایت", "هجران", "دیدار"
+        "جور", "ناز", "نیاز", "درد", "درمان", "طبیب", "بلا", "فتنه", "کوی"
     },
     "خراسانی": {
         "میهن", "شاه", "جنگ", "تیغ", "سپاه", "خسرو", "رزم", "بزم", "دژ", "اسپ",
-        "پهلوان", "گرد", "تاج", "تخت", "یزدان", "دیو", "کمند", "زوبین", "نامور",
-        "جهاندار", "کاووس", "رستم", "سهراب", "درفش", "سپهبد", "شیر", "اژدها"
+        "پهلوان", "گرد", "تاج", "تخت", "یزدان", "دیو", "کمند", "زوبین", "نامور"
     },
     "هندی": {
         "مضمون", "خیال", "آینه", "حیرت", "تمثیل", "موج", "گوهر", "تنگ", "پیچیده",
@@ -65,12 +76,11 @@ def preprocess_text(text):
     return re.sub(r"[ًٌٍَُِّْٰٖٓٔـ]", "", text)
 
 def fix_persian_text(text):
-    """اصلاح جهت و اتصال حروف فارسی برای رسم در Matplotlib"""
     reshaped = arabic_reshaper.reshape(str(text))
     return get_display(reshaped)
 
 # ------------------------------------------------------------------------------
-# ۲. تابع پردازش و تحلیل سبک
+# ۲. پردازش سبک و رسم گراف
 # ------------------------------------------------------------------------------
 def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     if file_obj is not None:
@@ -93,7 +103,7 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
             cleaned_docs.append(" ".join(words))
 
     if not cleaned_docs:
-        return None, pd.DataFrame({"پیام": ["واژه معتبری پس از حذف استاپ‌وردها یافت نشد."]})
+        return None, pd.DataFrame({"پیام": ["واژه معتبری یافت نشد."]})
 
     vectorizer = TfidfVectorizer(max_features=300, min_df=1)
     tfidf_matrix = vectorizer.fit_transform(cleaned_docs)
@@ -146,23 +156,20 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
 
     df_top = df.sort_values(by='composite_score', ascending=False).head(int(top_k_words)).copy()
 
-    # رسم گراف با اصلاح کامل عبارات فارسی
+    # رسم گراف
     G_viz = nx.Graph()
     main_node = "CENTER"
     G_viz.add_node(main_node)
 
-    node_label_map = {}
     for _, row in df_top.iterrows():
         fixed_kw = fix_persian_text(row['keyword'])
         G_viz.add_edge(main_node, fixed_kw, weight=row['composite_score'])
-        node_label_map[fixed_kw] = fixed_kw
 
     fig, ax = plt.subplots(figsize=(8, 8), dpi=150)
     fig.patch.set_facecolor('#FAFAFA')
     ax.set_facecolor('#FAFAFA')
 
     pos = nx.spring_layout(G_viz, k=0.55, iterations=40, seed=42)
-
     nx.draw_networkx_nodes(G_viz, pos, nodelist=[main_node], node_color='#1F2937', node_size=1100, ax=ax)
 
     other_nodes = [n for n in G_viz.nodes() if n != main_node]
@@ -172,11 +179,13 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     nx.draw_networkx_nodes(G_viz, pos, nodelist=other_nodes, node_color=colors, node_size=900, alpha=0.92, edgecolors='#374151', linewidths=1.2, ax=ax)
     nx.draw_networkx_edges(G_viz, pos, alpha=0.35, edge_color='#6B7280', width=1.2, ax=ax)
 
-    for node in other_nodes:
-        ax.text(pos[node][0], pos[node][1], node, horizontalalignment='center', verticalalignment='center', fontsize=8, fontweight='bold', color='#111827')
+    font_prop = fm.FontProperties(fname=FONT_PATH, size=8) if os.path.exists(FONT_PATH) else None
 
-    title_text = fix_persian_text(f"گراف چندلایه کلمات کلیدی - سبک {selected_style}")
-    ax.set_title(title_text, fontsize=11, fontweight='bold', pad=15, color='#111827')
+    for node in other_nodes:
+        ax.text(pos[node][0], pos[node][1], node, horizontalalignment='center', verticalalignment='center', fontweight='bold', color='#111827', fontproperties=font_prop)
+
+    title_text = fix_persian_text(f"گراف کلمات کلیدی - سبک {selected_style}")
+    ax.set_title(title_text, fontsize=11, fontweight='bold', pad=15, color='#111827', fontproperties=font_prop)
     ax.axis('off')
 
     df_display = df_top[['keyword', 'status', 'norm_tfidf', 'norm_pr_cooc', 'norm_pr_bert', 'composite_score']].reset_index(drop=True)
@@ -185,33 +194,14 @@ def analyze_style_pipeline(raw_text, file_obj, selected_style, top_k_words):
     return fig, df_display
 
 # ------------------------------------------------------------------------------
-# ۳. رابط کاربری Gradio به همراه بنر راهنما
+# ۳. UI تمیز بدون CSS مخرب RTL
 # ------------------------------------------------------------------------------
-custom_css = """
-.gradio-container {
-    direction: rtl !important;
-    text-align: right !important;
-    font-family: 'Vazirmatn', 'Tahoma', sans-serif !important;
-}
-.gradio-container * {
-    text-align: right !important;
-}
-.gr-button-primary {
-    background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%) !important;
-    border: none !important;
-    font-weight: bold !important;
-}
-"""
-
-with gr.Blocks(title="سامانه تحلیل سبک‌شناختی اشعار (Lite)", theme=gr.themes.Soft(), css=custom_css) as demo:
+with gr.Blocks(title="سامانه تحلیل سبک‌شناختی اشعار (Lite)", theme=gr.themes.Soft()) as demo:
     gr.Markdown(
-        """
-        # 📜 سامانه تحلیل سبک‌شناختی اشعار فارسی (نسخه Lite & Portable)
+        f"""
+        # 📜 سامانه تحلیل سبک‌شناختی اشعار فارسی (نسخه سبک)
         
-        این نسخه به عنوان **دموی سریع آنلاین** طراحی شده است تا بدون نیاز به سخت‌افزار سنگین روی وب اجرا شود.
-        
-        * **روش تحلیل:** ترکیب الگوریتم TF-IDF، تحلیل گراف هم‌آیی (Co-occurrence) و شباهت سیاقی واژگان.
-        * **نسخه پیشرفته ParsBERT:** برای اجرای مدل پژوهشی متکی بر ترنسفورمر ParsBERT، از **[دفترچه Google Colab پروژه](https://colab.research.google.com)** استفاده کنید.
+        این ابزار برای تحلیل آنلاین، سریع و استخراج کلمات کلیدی سبک‌شناختی اشعار بر پایه **TF-IDF** و **گراف‌های هم‌آیی واژگان** طراحی شده است.
         """
     )
 
